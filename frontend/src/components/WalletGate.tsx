@@ -6,15 +6,11 @@ import EmailLoginForm from "./EmailLoginForm";
 import WalletConnection from "./WalletConnection";
 import { useProfile } from "./ProfileContext";
 import { useLanguage } from "./LanguageContext";
-import { useMintedItems } from "./MintedItemsContext";
-import { fetchMintedContent } from "../services/solana";
 
 const WalletGate = ({ children }: PropsWithChildren) => {
-  const wallet = useWallet();
-  const { publicKey } = wallet;
+  const { publicKey } = useWallet();
   const { connection } = useConnection();
   const { profile, updateProfile } = useProfile();
-  const { replaceItems } = useMintedItems();
   const [status, setStatus] = useState<"idle" | "validating" | "valid" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [authMethod, setAuthMethod] = useState<"wallet" | "email">("wallet");
@@ -83,37 +79,6 @@ const WalletGate = ({ children }: PropsWithChildren) => {
       cancelled = true;
     };
   }, [connection, isEmailAuthenticated, publicKey, t.validationError]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!publicKey || status !== "valid") {
-      replaceItems([]);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const loadMintedContent = async () => {
-      try {
-        const items = await fetchMintedContent(connection, wallet);
-        if (!cancelled) {
-          replaceItems(items);
-        }
-      } catch (error) {
-        console.error("Failed to load minted content", error);
-        if (!cancelled) {
-          replaceItems([]);
-        }
-      }
-    };
-
-    void loadMintedContent();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [connection, wallet, publicKey, status, replaceItems]);
 
   const validationMessage = useMemo(() => {
     if (status === "validating") {

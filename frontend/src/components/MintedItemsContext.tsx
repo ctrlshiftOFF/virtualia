@@ -32,7 +32,6 @@ export interface MintedItem {
 interface MintedItemContextValue {
   items: MintedItem[];
   addItem: (item: MintedItem) => void;
-  replaceItems: (items: MintedItem[]) => void;
 }
 
 const MintedItemContext = createContext<MintedItemContextValue | undefined>(undefined);
@@ -44,7 +43,6 @@ export const MintedItemProvider = ({ children }: { children: ReactNode }) => {
     () => ({
       items,
       addItem: (item: MintedItem) => setItems((prev) => [item, ...prev]),
-      replaceItems: (nextItems: MintedItem[]) => setItems(nextItems),
     }),
     [items]
   );
