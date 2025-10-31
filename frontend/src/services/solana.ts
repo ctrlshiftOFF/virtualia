@@ -1,6 +1,11 @@
 import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
-import { Connection, PublicKey, SystemProgram } from "@solana/web3.js";
-import type { ContentType, EducationLevel, StorageProtocol } from "../components/MintedItemsContext";
+import { Connection, PublicKey, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import type {
+  ContentType,
+  EducationLevel,
+  MintedItem,
+  StorageProtocol,
+} from "../components/MintedItemsContext";
 import { SOLANA_CONFIG, PROGRAM_ID_VALIDATED } from "../config/solana";
 
 // Import the IDL (versioned in frontend for build compatibility)
@@ -168,6 +173,96 @@ export const mintContent = async (
     console.error("Failed to mint content:", error);
     throw new Error(`Failed to mint content on blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
+};
+
+/**
+ * Fetch all minted content for the connected wallet from on-chain PDAs.
+ */
+export const fetchMintedContent = async (
+  connection: Connection,
+  wallet: any
+): Promise<MintedItem[]> => {
+  if (!wallet || !wallet.publicKey) {
+    throw new Error("Wallet not connected");
+  }
+
+  const program = getVirtualiaProgram(connection, wallet);
+  const publicKey = wallet.publicKey;
+
+  const [profilePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("profile"), publicKey.toBuffer()],
+    PROGRAM_ID
+  );
+
+  let profileAccount: any;
+  try {
+    profileAccount = (await program.account.profile.fetch(profilePda)) as any;
+  } catch (error) {
+    console.warn("Profile account not found for wallet, skipping on-chain fetch", error);
+    return [];
+  }
+
+  const totalMints = (profileAccount.totalMints as BN).toNumber();
+  if (!Number.isFinite(totalMints) || totalMints <= 0) {
+    return [];
+  }
+
+  const items: MintedItem[] = [];
+
+  for (let index = 0; index < totalMints; index += 1) {
+    const [contentPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("content"),
+        publicKey.toBuffer(),
+        new BN(index).toArrayLike(Buffer, "le", 8),
+      ],
+      PROGRAM_ID
+    );
+
+    try {
+      const contentAccount = (await program.account.content.fetch(contentPda)) as any;
+
+      const rewardLamports = new BN(contentAccount.rewardLamports ?? 0).toNumber();
+      const createdAtSeconds = new BN(contentAccount.createdAt ?? 0).toNumber();
+      const ownerAddress = new PublicKey(contentAccount.owner).toBase58();
+      const uri: string = typeof contentAccount.uri === "string" ? contentAccount.uri : "";
+
+      const inferredProtocol: StorageProtocol = uri.startsWith("ipfs://")
+        ? "ipfs"
+        : uri.includes("arweave")
+        ? "arweave"
+        : "ipfs";
+
+      const mintedAtIso = createdAtSeconds > 0
+        ? new Date(createdAtSeconds * 1000).toISOString()
+        : new Date().toISOString();
+
+      items.push({
+        id: contentPda.toBase58(),
+        title: typeof contentAccount.title === "string" ? contentAccount.title : "Untitled",
+        description: typeof contentAccount.description === "string" ? contentAccount.description : "",
+        contentType: (typeof contentAccount.contentType === "string"
+          ? contentAccount.contentType
+          : "outro") as ContentType,
+        uri,
+        reward: rewardLamports / LAMPORTS_PER_SOL,
+        ownerAddress,
+        mintedAt: mintedAtIso,
+        year: "",
+        institution: "",
+        educationLevel: "outro",
+        knowledgeArea: "",
+        knowledgeSubarea: "",
+        storageProtocol: inferredProtocol,
+        mintAddress: contentPda.toBase58(),
+        metadataSignature: "",
+      });
+    } catch (error) {
+      console.warn(`Failed to fetch content PDA at index ${index}`, error);
+    }
+  }
+
+  return items;
 };
 
 /**
