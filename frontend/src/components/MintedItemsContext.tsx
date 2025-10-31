@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, ReactNode, useContext, useMemo, useState } from "react";
 
 export type ContentType = "artigo" | "resenha" | "tradução" | "certificado" | "outro";
 export type StorageProtocol = "ipfs" | "arweave";
@@ -40,27 +40,13 @@ const MintedItemContext = createContext<MintedItemContextValue | undefined>(unde
 export const MintedItemProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<MintedItem[]>([]);
 
-  const addItem = useCallback(
-    (item: MintedItem) => {
-      setItems((prev) => [item, ...prev]);
-    },
-    [setItems]
-  );
-
-  const replaceItems = useCallback(
-    (nextItems: MintedItem[]) => {
-      setItems(nextItems);
-    },
-    [setItems]
-  );
-
   const value = useMemo(
     () => ({
       items,
-      addItem,
-      replaceItems,
+      addItem: (item: MintedItem) => setItems((prev) => [item, ...prev]),
+      replaceItems: (nextItems: MintedItem[]) => setItems(nextItems),
     }),
-    [items, addItem, replaceItems]
+    [items]
   );
 
   return <MintedItemContext.Provider value={value}>{children}</MintedItemContext.Provider>;
